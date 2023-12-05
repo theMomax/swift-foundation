@@ -303,4 +303,68 @@ final class DateRelativeFormatStyleTests: XCTestCase {
         _verifyStyle(725759999.0, relativeTo: 645019200.0, expected: "in 2 years")
 
     }
+
+    @available(FoundationPreview 0.4, *)
+    func testAllowedFieldsNamed() throws {
+        var named = Date.RelativeFormatStyle(presentation: .named, locale: enUSLocale, calendar: calendar)
+
+        func _verifyStyle(_ dateStr: String, relativeTo: String, expected: String, file: StaticString = #file, line: UInt = #line) {
+            let date = try! Date.ISO8601FormatStyle().parse(dateStr)
+            let refDate = try! Date.ISO8601FormatStyle().parse(relativeTo)
+            let formatted = named._format(date, refDate: refDate)
+            XCTAssertEqual(formatted, expected, file: file, line: line)
+        }
+
+        named.allowedFields = [.year]
+        _verifyStyle("2021-06-10T12:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "this year")
+        _verifyStyle("2020-12-06T12:00:00Z", relativeTo: "2021-01-10T12:00:00Z", expected: "last year")
+        named.allowedFields = [.year, .hour]
+        _verifyStyle("2021-06-11T12:00:00Z", relativeTo: "2021-06-01T12:00:00Z", expected: "in 240 hours")
+        _verifyStyle("2020-12-06T12:00:00Z", relativeTo: "2021-01-10T12:00:00Z", expected: "840 hours ago")
+        _verifyStyle("2020-01-10T12:00:00Z", relativeTo: "2021-01-10T12:00:00Z", expected: "last year")
+        named.allowedFields = [.minute]
+        _verifyStyle("2021-06-10T11:59:31Z", relativeTo: "2021-06-10T12:00:00Z", expected: "this minute")
+        _verifyStyle("2021-06-10T11:59:30Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 minute ago")
+        _verifyStyle("2021-06-10T11:59:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 minute ago")
+        named.allowedFields = [.hour]
+        _verifyStyle("2021-06-10T11:50:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "this hour")
+        named.allowedFields = [.hour, .minute]
+        _verifyStyle("2021-06-10T11:49:30Z", relativeTo: "2021-06-10T12:00:00Z", expected: "11 minutes ago")
+        named.allowedFields = [.day]
+        _verifyStyle("2021-06-08T13:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "2 days ago")
+        _verifyStyle("2021-06-09T11:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "yesterday")
+
+        _verifyStyle("2021-06-09T13:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "yesterday")
+        _verifyStyle("2021-06-11T07:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "tomorrow")
+    }
+
+    @available(FoundationPreview 0.4, *)
+    func testAllowedFieldsNumeric() throws {
+        var named = Date.RelativeFormatStyle(presentation: .numeric, locale: enUSLocale, calendar: calendar)
+
+        func _verifyStyle(_ dateStr: String, relativeTo: String, expected: String, file: StaticString = #file, line: UInt = #line) {
+            let date = try! Date.ISO8601FormatStyle().parse(dateStr)
+            let refDate = try! Date.ISO8601FormatStyle().parse(relativeTo)
+            let formatted = named._format(date, refDate: refDate)
+            XCTAssertEqual(formatted, expected, file: file, line: line)
+        }
+
+        named.allowedFields = [.year]
+        _verifyStyle("2021-06-10T12:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "in 0 years")
+        _verifyStyle("2020-12-06T12:00:00Z", relativeTo: "2021-01-10T12:00:00Z", expected: "1 year ago")
+        named.allowedFields = [.minute]
+        _verifyStyle("2021-06-10T11:59:31Z", relativeTo: "2021-06-10T12:00:00Z", expected: "in 0 minutes")
+        _verifyStyle("2021-06-10T11:59:30Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 minute ago")
+        _verifyStyle("2021-06-10T11:59:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 minute ago")
+        named.allowedFields = [.hour]
+        _verifyStyle("2021-06-10T11:50:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "in 0 hours")
+        named.allowedFields = [.hour, .minute]
+        _verifyStyle("2021-06-10T11:49:30Z", relativeTo: "2021-06-10T12:00:00Z", expected: "11 minutes ago")
+        named.allowedFields = [.day]
+        _verifyStyle("2021-06-08T13:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "2 days ago")
+        _verifyStyle("2021-06-09T11:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 day ago")
+
+        _verifyStyle("2021-06-09T13:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "1 day ago")
+        _verifyStyle("2021-06-11T07:00:00Z", relativeTo: "2021-06-10T12:00:00Z", expected: "in 1 day")
+    }
 }
