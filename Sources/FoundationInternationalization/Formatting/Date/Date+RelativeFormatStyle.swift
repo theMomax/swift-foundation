@@ -208,9 +208,15 @@ extension Date {
             // "hour: 23, minute: 50" -> "hour: 24" // only carry to the immediate previous value
             // "hour: -23, minute: -30" -> "hour: -24"
 
-            let components = calendar.dateComponents(Set(ICURelativeDateFormatter.sortedAllowedComponents.filter({
+            var components = calendar.dateComponents(Set(ICURelativeDateFormatter.sortedAllowedComponents.filter({
                 Date.ComponentsFormatStyle.Field.Option(component: $0)! <= Date.ComponentsFormatStyle.Field.Option(component: largestAllowedComponent)!
             })).union([.nanosecond]), from: refDate, to: destDate)
+
+            if let nanoseconds = components.nanosecond,
+               let seconds = components.second,
+               abs(nanoseconds) >= 500_000_000 {
+                components.second = seconds + nanoseconds.signum()
+            }
 
             let largestNonZeroComponent = components.nonZeroComponentsAndValue.first ?? (.nanosecond, components.nanosecond ?? 0)
 
@@ -251,31 +257,37 @@ extension Date {
                 }
             }
 
-            guard let shiftedDate = calendar.date(byAdding: roundedLargest.component, value: roundedLargest.value, to: destDate) else {
+            guard let shiftedDate = calendar.date(byAdding: roundedLargest.component, value: -roundedLargest.value, to: destDate) else {
                 return nil
             }
 
-            let roundedComponents = calendar.dateComponents(allowedComponents, from: destDate, to: shiftedDate)
-
-            return roundedComponents.nonZeroComponentsAndValue.first
+            // re-calculate component in case rounding caused next larger component to become non-zero
+            if let newRoundedLargest = calendar.dateComponents(allowedComponents, from: shiftedDate, to: destDate).nonZeroComponentsAndValue.first, newRoundedLargest.component != roundedLargest.component {
+                return newRoundedLargest
+            } else {
+                // if the component didn't change, use the original calculation, which is more precise
+                return roundedLargest
+            }
         }
 
-        fileprivate func _largestNonZeroComponent(_ destDate: Date, reference refDate: Date, adjustComponent: ComponentAdjustmentStrategy) -> CalendarComponentAndValue? {
+        func _largestNonZeroComponent(_ destDate: Date, reference refDate: Date, adjustComponent: ComponentAdjustmentStrategy) -> CalendarComponentAndValue? {
             // Precision of `Date` is higher than second, which is the smallest supported unit. Round to seconds.
             let refDate = destDate.addingTimeInterval(refDate.timeIntervalSince(destDate).rounded(increment: 1.0, rule: .toNearestOrAwayFromZero))
 
-            let components = self.calendar.dateComponents([.year, .second, .nanosecond], from: refDate, to: destDate)
-            let nanosecond = components.nanosecond ?? 0
+//            let components = self.calendar.dateComponents([.year, .second, .nanosecond], from: refDate, to: destDate)
+//            let nanosecond = components.nanosecond ?? 0
+//
+//
+//            guard var adjustedDestDate = calendar.date(byAdding: .nanosecond, value: -nanosecond, to: destDate) else {
+//                return nil
+//            }
+//
+//            if abs(nanosecond) >= 500000000,
+//               let date = calendar.date(byAdding: .second, value: nanosecond > 0 ? 1 : -1, to: adjustedDestDate) {
+//                adjustedDestDate = date
+//            }
 
-
-            guard var adjustedDestDate = calendar.date(byAdding: .nanosecond, value: -nanosecond, to: destDate) else {
-                return nil
-            }
-
-            if abs(nanosecond) >= 500000000,
-               let date = calendar.date(byAdding: .second, value: nanosecond > 0 ? 1 : -1, to: adjustedDestDate) {
-                adjustedDestDate = date
-            }
+            var adjustedDestDate = destDate
 
             let allowedComponents = Set(self.sortedAllowedComponents)
 
@@ -288,13 +300,13 @@ extension Date {
             let compAndValue: CalendarComponentAndValue
             let largest = dateComponents.nonZeroComponentsAndValue.first ?? (smallest, 0)
 
-                        let comp = largest.component
-                        if comp == .hour || comp == .minute || comp == .second {
-                            compAndValue = Self._roundedLargestComponentValue(refDate: refDate,
-                                                                              for: adjustedDestDate,
-                                                                              calendar: calendar,
-                                                                              allowedComponents: allowedComponents,
-                                                                              largestAllowedComponent: comp) ?? largest
+            let comp = largest.component
+            if comp == .hour || comp == .minute || comp == .second {
+                compAndValue = Self._roundedLargestComponentValue(refDate: refDate,
+                                                                  for: adjustedDestDate,
+                                                                  calendar: calendar,
+                                                                  allowedComponents: allowedComponents,
+                                                                  largestAllowedComponent: comp) ?? largest
             } else {
                 compAndValue = Self._alignedComponentValue(component: largest.component, for: adjustedDestDate, reference: refDate, calendar: calendar, allowedComponents: allowedComponents) ?? largest
             }

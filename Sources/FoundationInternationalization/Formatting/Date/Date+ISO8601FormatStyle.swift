@@ -77,7 +77,13 @@ extension Date {
         /// The time zone to use to create and parse date representations.
         public var timeZone: TimeZone = TimeZone(secondsFromGMT: 0)!
 
-        private var format: String {
+        var calendar: Calendar {
+            var calendar = Calendar(identifier: .iso8601)
+            calendar.timeZone = timeZone
+            return calendar
+        }
+
+        var format: String {
             let fields = formatFields
 
             var result = ""
@@ -141,9 +147,7 @@ extension Date {
         }
 
         private var formatter: ICUDateFormatter {
-            let dateFormatInfo = ICUDateFormatter.DateFormatInfo(localeIdentifier: "en_US_POSIX", timeZoneIdentifier: timeZone.identifier, calendarIdentifier: .gregorian, firstWeekday: 2, minimumDaysInFirstWeek: 4, capitalizationContext: .unknown, pattern: format, parseLenient: false)
-
-            return ICUDateFormatter.cachedFormatter(for: dateFormatInfo)
+            return ICUDateFormatter.cachedFormatter(for: self)
         }
 
         // MARK: -
@@ -340,5 +344,42 @@ extension RegexComponent where Self == Date.ISO8601FormatStyle {
     /// - Returns:  A `RegexComponent` to match an ISO 8601 date string, including time zone.
     public static func iso8601Date(timeZone: TimeZone, dateSeparator: Self.DateSeparator = .dash) -> Self {
         return Date.ISO8601FormatStyle(dateSeparator: dateSeparator, timeZone: timeZone).year().month().day()
+    }
+}
+
+// MARK: DiscreteFormatStyle Conformance
+
+@available(FoundationPreview 0.4, *)
+extension Date.ISO8601FormatStyle : DiscreteFormatStyle {
+    public func discreteInput(before input: Date) -> Date? {
+        guard let (bound, isIncluded) = bound(for: input, isLower: true) else {
+            return nil
+        }
+
+        return isIncluded ? bound.nextDown : bound
+    }
+
+    public func discreteInput(after input: Date) -> Date? {
+        guard let (bound, isIncluded) = bound(for: input, isLower: false) else {
+            return nil
+        }
+
+        return isIncluded ? bound.nextUp : bound
+    }
+
+    public func input(before input: Date) -> Date? {
+        let result = Calendar.nextAccuracyStep(for: input, direction: .backward)
+
+        return result < input ? result : nil
+    }
+
+    public func input(after input: Date) -> Date? {
+        let result = Calendar.nextAccuracyStep(for: input, direction: .forward)
+
+        return result > input ? result : nil
+    }
+
+    func bound(for input: Date, isLower: Bool) -> (bound: Date, includedInRangeOfInput: Bool)? {
+        calendar.bound(for: input, isLower: isLower, updateSchedule: ICUDateFormatter.DateFormatInfo.cachedUpdateSchedule(for: self))
     }
 }
